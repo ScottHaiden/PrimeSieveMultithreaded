@@ -40,12 +40,14 @@ fn main() {
     let max = u32::MAX;
     let max_track = (max as f64).sqrt() as u32;
 
-    let primes = Arc::new(find_prime_vec(max_track));
-
+    eprintln!("Starting printing thread...");
     let printer = std::thread::spawn(move || {
+        eprintln!("Collecting primes...");
         let mut all_primes = receiver.iter().collect::<Vec<u32>>();
+        eprintln!("Got {} primes; sorting...", all_primes.len());
         all_primes.sort();
 
+        eprintln!("Sorted!");
         let mut out = BufWriter::new(std::io::stdout());
         for prime in all_primes {
             let bytes = prime.to_be_bytes();
@@ -53,6 +55,10 @@ fn main() {
         }
     });
 
+    eprintln!("Finding seed primes...");
+    let primes = Arc::new(find_prime_vec(max_track));
+
+    eprintln!("Enqueueing tasks...");
     let threadpool = ThreadPool::new(std::thread::available_parallelism().unwrap().get());
     for i in 1.. {
         // Point returns a multiple of the square root of the maximum number we're checking to, if
@@ -77,9 +83,14 @@ fn main() {
         threadpool.execute(move || { check_block(sender, primes, interval); });
         if hi == max { break; }
     }
+    // We put the primes in *after* we've started all the tasks so that we don't block on sending
+    // all the low primes first; this is fine, since the output thread needs to sort the list
+    // anyway.
     for &prime in primes.iter() { sender.send(prime).expect("send failed"); }
     drop(sender);
 
+    eprintln!("Awaiting tasks...");
     threadpool.join();
     printer.join().expect("Failed to join printer");
+    eprintln!("Done!");
 }
