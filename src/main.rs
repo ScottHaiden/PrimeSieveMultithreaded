@@ -41,7 +41,7 @@ fn main() {
     let max_track = (max as f64).sqrt() as u32;
 
     eprintln!("Starting printing thread...");
-    let printer = std::thread::spawn(move || {
+    let printer = std::thread::Builder::new().name("collector".into()).spawn(move || {
         eprintln!("Collecting primes...");
         let mut all_primes = receiver.iter().collect::<Vec<u32>>();
         eprintln!("Got {} primes; sorting...", all_primes.len());
@@ -53,13 +53,14 @@ fn main() {
             let bytes = prime.to_be_bytes();
             out.write_all(&bytes).expect("write failed");
         }
-    });
+    }).unwrap();
 
     eprintln!("Finding seed primes...");
     let primes = Arc::new(find_prime_vec(max_track));
 
     eprintln!("Enqueueing tasks...");
-    let threadpool = ThreadPool::new(std::thread::available_parallelism().unwrap().get());
+    let threadpool = ThreadPool::with_name("search_threads".into(),
+                                           std::thread::available_parallelism().unwrap().get());
     for i in 1.. {
         // Point returns a multiple of the square root of the maximum number we're checking to, if
         // it's less than max, otherwise max itself.
