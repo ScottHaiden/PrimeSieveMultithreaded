@@ -25,7 +25,9 @@ fn find_prime_vec(max_prime: u32) -> Vec<u32> {
     return ret;
 }
 
-fn check_block(sender: mpsc::Sender<u32>, primes: Arc<Vec<u32>>, cands: Box<dyn Iterator<Item = u32>>) {
+fn check_block(sender: mpsc::Sender<u32>,
+               primes: Arc<Vec<u32>>,
+               cands: Box<dyn Iterator<Item = u32>>) {
     for cand in cands {
         if !is_prime(cand, &primes) { continue; }
         sender.send(cand).expect("Sending failed");
