@@ -7,11 +7,9 @@ use threadpool::ThreadPool;
 
 fn is_prime(i:u32, primes: &Vec<u32>) -> bool {
     let limit = (i as f64).sqrt() as u32;
-    for &prime in primes {
-        if prime > limit { break; }
-        if i % prime == 0 { return false; }
-    }
-    return true;
+    return primes.iter()
+                 .take_while(|&&prime| prime <= limit)
+                 .all(|&prime| i % prime != 0);
 }
 
 fn find_prime_vec(max_prime: u32) -> Vec<u32> {
@@ -28,10 +26,8 @@ fn find_prime_vec(max_prime: u32) -> Vec<u32> {
 fn check_block(sender: mpsc::Sender<u32>,
                primes: Arc<Vec<u32>>,
                cands: Box<dyn Iterator<Item = u32>>) {
-    for cand in cands {
-        if !is_prime(cand, &primes) { continue; }
-        sender.send(cand).expect("Sending failed");
-    }
+    cands.filter(|&cand| is_prime(cand, &primes))
+         .for_each(|prime| sender.send(prime).expect("sending failed"));
 }
 
 fn main() {
@@ -51,10 +47,9 @@ fn main() {
 
         eprintln!("Sorted!");
         let mut out = BufWriter::new(std::io::stdout());
-        for prime in all_primes {
-            let bytes = prime.to_be_bytes();
-            out.write_all(&bytes).expect("write failed");
-        }
+        all_primes.into_iter()
+                  .map(|prime| prime.to_be_bytes())
+                  .for_each(|bytes| out.write_all(&bytes).expect("write failed"));
     }).unwrap();
 
     eprintln!("Finding seed primes...");
@@ -89,11 +84,10 @@ fn main() {
     // We put the primes in *after* we've started all the tasks so that we don't block on sending
     // all the low primes first; this is fine, since the output thread needs to sort the list
     // anyway.
-    for &prime in primes.iter() { sender.send(prime).expect("send failed"); }
-    drop(sender);
+    (move || primes.iter().for_each(|&prime| sender.send(prime).expect("send failed")))();
 
     eprintln!("Awaiting tasks...");
-    threadpool.join();
+    (move || threadpool.join())();
     printer.join().expect("Failed to join printer");
     eprintln!("Done!");
 }
